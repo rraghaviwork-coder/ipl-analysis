@@ -137,6 +137,110 @@ async function loadH2H() {
     : `<tr><td colspan="5" class="muted">These teams never met in the selected seasons.</td></tr>`;
 }
 
+// ---------- Ratings & predictor (output of r/model.R) ----------
+async function loadModel() {
+  const res = await fetch("/api/model");
+  const m = await res.json();
+  if (!res.ok) {
+    $("model-body").hidden = true;
+    $("model-error").hidden = false;
+    $("model-error").textContent = m.error;
+    return;
+  }
+
+  const active = m.current.filter((r) => r.active);
+  const activeSet = new Set(active.map((r) => r.team));
+
+  draw("c-elo", {
+    type: "line",
+    data: {
+      labels: m.history.seasons,
+      datasets: m.history.teams.filter((t) => activeSet.has(t.team)).map((t) => ({
+        label: short(t.team), data: t.ratings, borderColor: color(t.team), backgroundColor: color(t.team),
+        tension: 0.25, pointRadius: 2, borderWidth: 2, spanGaps: false,
+      })),
+    },
+    options: {
+      interaction: { mode: "nearest", intersect: false },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 8 } } },
+      scales: { x: { grid: { display: false } }, y: { grid: { color: "#eef1f7" } } },
+    },
+  });
+
+  draw("c-elonow", {
+    type: "bar",
+    data: { labels: active.map((r) => r.team), datasets: [{ data: active.map((r) => r.elo - 1500), backgroundColor: active.map((r) => color(r.team)), borderRadius: 6, maxBarThickness: 22 }] },
+    options: {
+      indexAxis: "y",
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => ` Elo ${(c.raw + 1500).toFixed(0)} · form ${Math.round(active[c.dataIndex].form * 100)}% of last 10` } } },
+      scales: { x: { grid: { color: "#eef1f7" }, ticks: { callback: (v) => v + 1500 } }, y: { grid: { display: false } } },
+    },
+  });
+
+  $("m-coef").innerHTML = m.coefficients.map((c) => `<tr>
+      <td>${esc(c.label)}</td><td class="${c.p_value < 0.05 ? "sig" : ""}">${c.odds_ratio.toFixed(2)}</td>
+      <td>${c.ci_low.toFixed(2)} – ${c.ci_high.toFixed(2)}</td>
+      <td class="${c.p_value < 0.05 ? "sig" : ""}">${c.p_value < 0.001 ? "&lt;0.001" : c.p_value.toFixed(3)}</td></tr>`).join("");
+
+  const e = m.evaluation;
+  $("m-split").textContent = `(trained ${e.train_seasons}, tested on ${e.test_seasons}: ${e.n_test} matches)`;
+  const row = (name, r) => `<tr><td>${name}</td><td>${r.accuracy}%</td><td>${r.log_loss.toFixed(3)}</td><td>${r.brier.toFixed(3)}</td></tr>`;
+  $("m-eval").innerHTML = row("Full model", e.model) + row("Elo only", e.elo_only) + row("Coin flip", e.coin_flip);
+
+  draw("c-calib", {
+    type: "bar",
+    data: {
+      labels: m.calibration.map((c) => `${c.bin} (n=${c.n})`),
+      datasets: [
+        { label: "Predicted favourite win %", data: m.calibration.map((c) => c.predicted), backgroundColor: "#276dc3", borderRadius: 4 },
+        { label: "Actual favourite win %", data: m.calibration.map((c) => c.actual), backgroundColor: "#ff7a1a", borderRadius: 4 },
+      ],
+    },
+    options: { scales: { x: { grid: { display: false } }, y: { min: 0, max: 100, grid: { color: "#eef1f7" }, ticks: { callback: (v) => v + "%" } } } },
+  });
+
+  $("m-upsets").innerHTML = m.upsets.map((u) => `<tr>
+      <td>${esc(u.date)}</td>
+      <td><span class="pill" style="background:${color(u.winner)}">${esc(short(u.winner))}</span></td>
+      <td>${esc(u.loser)}</td><td>${esc(u.venue)}</td><td>${u.win_prob}%</td></tr>`).join("");
+
+  $("m-foot").textContent = `Elo: start ${m.settings.start}, K = ${m.settings.k}, ${Math.round(m.settings.carry * 100)}% carried into each new season. ` +
+    `Fitted on ${m.n_matches} matches with ${m.r_version} at ${m.generated}. IPL results are close to a coin flip, so treat predictions as slight leans, not certainties.`;
+
+  const opts = active.map((r) => `<option value="${esc(r.team)}">${esc(r.team)}</option>`).join("");
+  $("p-a").innerHTML = $("p-b").innerHTML = opts;
+  $("p-a").value = active[0].team;
+  $("p-b").value = active[1].team;
+  ["p-a", "p-b", "p-toss", "p-dec", "p-venue"].forEach((id) => ($(id).onchange = loadPrediction));
+  loadPrediction();
+}
+
+async function loadPrediction() {
+  const a = $("p-a").value, b = $("p-b").value;
+  $("p-na").textContent = a;
+  $("p-nb").textContent = b;
+  if (a === b) {
+    $("p-pa").textContent = $("p-pb").textContent = "–";
+    $("p-why").textContent = "Pick two different teams.";
+    return;
+  }
+  const q = new URLSearchParams({ a, b, toss: $("p-toss").value, decision: $("p-dec").value, venue: $("p-venue").value });
+  const p = await (await fetch(`/api/predict?${q}`)).json();
+  $("p-pa").textContent = p.p_a + "%";
+  $("p-pb").textContent = p.p_b + "%";
+  $("p-pa").style.color = color(a);
+  $("p-pb").style.color = color(b);
+  Object.assign($("p-sa").style, { width: p.p_a + "%", background: color(a) });
+  Object.assign($("p-sb").style, { width: p.p_b + "%", background: color(b) });
+
+  const names = { elo: "Elo gap", form: "recent form", toss: "toss", bat: "batting order", home: "home ground" };
+  const drivers = Object.entries(p.contributions).filter(([, v]) => Math.abs(v) >= 0.005)
+    .sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))
+    .map(([k, v]) => `${names[k]} favours <b>${esc(short(v > 0 ? a : b))}</b>`);
+  $("p-why").innerHTML = `Elo ${Math.round(p.elo_a)} vs ${Math.round(p.elo_b)} · won ${Math.round(p.form_a * 100)}% vs ${Math.round(p.form_b * 100)}% of last 10. ` +
+    (drivers.length ? drivers.join(", ") + "." : "No factor separates the teams.");
+}
+
 async function init() {
   META = await (await fetch("/api/meta")).json();
   const opts = (list) => list.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
@@ -153,6 +257,7 @@ async function init() {
   $("from").onchange = $("to").onchange = refresh;
   $("team-a").onchange = $("team-b").onchange = loadH2H;
   refresh();
+  loadModel();
 }
 
 init();

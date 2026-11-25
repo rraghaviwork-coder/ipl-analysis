@@ -2,7 +2,11 @@
 
 Run:  python app.py   then open http://localhost:5000
 """
+import json
+import math
 import os
+import shutil
+import subprocess
 
 import pandas as pd
 from flask import Flask, jsonify, render_template, request
@@ -55,6 +59,29 @@ def load_data():
 DF = load_data()
 SEASONS = sorted(DF["season"].unique().tolist())
 TEAMS = sorted(set(DF["team1"]) | set(DF["team2"]))
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+MODEL_SCRIPT = os.path.join(ROOT, "r", "model.R")
+MODEL_FILE = os.path.join(ROOT, "data", "model.json")
+
+
+def load_model():
+    """Load the R model output, re-running r/model.R when it is missing or stale."""
+    stale = not os.path.exists(MODEL_FILE) or os.path.getmtime(MODEL_FILE) < max(
+        os.path.getmtime(MODEL_SCRIPT), os.path.getmtime(LOCAL_FILE) if os.path.exists(LOCAL_FILE) else 0)
+    if stale and shutil.which("Rscript") and os.path.exists(LOCAL_FILE):
+        try:
+            subprocess.run(["Rscript", MODEL_SCRIPT], check=True, timeout=120)
+        except (subprocess.SubprocessError, OSError) as e:
+            print(f"R model failed: {e}")
+    if not os.path.exists(MODEL_FILE):
+        print("data/model.json not found: install R + jsonlite and run `Rscript r/model.R`")
+        return None
+    with open(MODEL_FILE) as f:
+        return json.load(f)
+
+
+MODEL = load_model()
 
 app = Flask(__name__)
 
@@ -147,6 +174,44 @@ def h2h():
     return jsonify(matches=len(m), a_wins=int((m["winner"] == a).sum()),
                    b_wins=int((m["winner"] == b).sum()), no_result=int(m["winner"].isna().sum()),
                    rows=rows)
+
+
+@app.route("/api/model")
+def model():
+    if MODEL is None:
+        return jsonify(error="Model not available. Install R and run: Rscript r/model.R"), 503
+    return jsonify(MODEL)
+
+
+@app.route("/api/predict")
+def predict():
+    """Win probability for team A vs team B from the R logistic-regression coefficients.
+
+    toss: a | b | unknown    decision: bat | field | unknown    venue: a | b | neutral
+    Unknown toss/decision contribute 0 (the average of both outcomes on the logit scale).
+    """
+    if MODEL is None:
+        return jsonify(error="Model not available"), 503
+    teams = {r["team"]: r for r in MODEL["current"]}
+    a, b = request.args.get("a"), request.args.get("b")
+    if a not in teams or b not in teams or a == b:
+        return jsonify(error="Pick two different teams"), 400
+    toss, decision = request.args.get("toss", "unknown"), request.args.get("decision", "unknown")
+    venue = request.args.get("venue", "neutral")
+
+    toss_x = {"a": 1, "b": -1}.get(toss, 0)
+    bat_x = toss_x * {"bat": 1, "field": -1}.get(decision, 0)
+    x = {"elo": (teams[a]["elo"] - teams[b]["elo"]) / 100,
+         "form": teams[a]["form"] - teams[b]["form"],
+         "toss": toss_x, "bat": bat_x,
+         "home": {"a": 1, "b": -1}.get(venue, 0)}
+    coefs = {c["term"]: c["estimate"] for c in MODEL["coefficients"]}
+    parts = {k: coefs[k] * x[k] for k in coefs}
+    p = 1 / (1 + math.exp(-sum(parts.values())))
+    return jsonify(a=a, b=b, p_a=round(p * 100, 1), p_b=round((1 - p) * 100, 1),
+                   elo_a=teams[a]["elo"], elo_b=teams[b]["elo"],
+                   form_a=teams[a]["form"], form_b=teams[b]["form"],
+                   contributions={k: round(v, 4) for k, v in parts.items()})
 
 
 if __name__ == "__main__":

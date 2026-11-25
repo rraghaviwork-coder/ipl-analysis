@@ -16,7 +16,7 @@
     <nav class="nav">
       <div class="brand"><span class="ball"></span> IPL Analytics</div>
       <div class="links">
-        <a href="#teams">Teams</a><a href="#toss">Toss</a><a href="#h2h">Head to Head</a><a href="#players">Players</a>
+        <a href="#teams">Teams</a><a href="#toss">Toss</a><a href="#h2h">Head to Head</a><a href="#predict">Predictor</a><a href="#players">Players</a>
       </div>
     </nav>
     <h1>Indian Premier League <span>Match Analysis</span></h1>
@@ -93,6 +93,65 @@
     </div>
   </section>
 
+  <section id="predict">
+    <h2>Ratings &amp; Match Predictor <span class="tag">Built in R</span></h2>
+    <p class="muted lead">Elo ratings and a logistic-regression win model fitted in R (<code>r/model.R</code>) on every match.
+      Covers all seasons and ignores the season filter above.</p>
+    <div id="model-error" class="card muted" hidden></div>
+    <div id="model-body">
+      <div class="grid two">
+        <div class="card"><h3>Elo rating at the end of each season <small>(active teams)</small></h3><div class="chart tall"><canvas id="c-elo"></canvas></div></div>
+        <div class="card"><h3>Current Elo ratings</h3><div class="chart tall"><canvas id="c-elonow"></canvas></div></div>
+      </div>
+
+      <div class="card">
+        <h3>Who wins? Pre-match prediction</h3>
+        <div class="pred-form">
+          <label>Team A <select id="p-a"></select></label>
+          <label>Team B <select id="p-b"></select></label>
+          <label>Toss won by <select id="p-toss"><option value="unknown">Not known yet</option><option value="a">Team A</option><option value="b">Team B</option></select></label>
+          <label>Toss winner chose to <select id="p-dec"><option value="unknown">Not known yet</option><option value="field">Field</option><option value="bat">Bat</option></select></label>
+          <label>Venue <select id="p-venue"><option value="neutral">Neutral</option><option value="a">Team A's home</option><option value="b">Team B's home</option></select></label>
+        </div>
+        <div class="score">
+          <div class="side"><div class="num" id="p-pa">–</div><div class="name" id="p-na"></div></div>
+          <div class="mid">win chance</div>
+          <div class="side"><div class="num" id="p-pb">–</div><div class="name" id="p-nb"></div></div>
+        </div>
+        <div class="split"><div id="p-sa"></div><div id="p-sb"></div></div>
+        <div class="muted" id="p-why"></div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <h3>What drives a win? <small>(odds ratios, 95% CI)</small></h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Factor</th><th>Odds ratio</th><th>95% CI</th><th>p-value</th></tr></thead>
+            <tbody id="m-coef"></tbody>
+          </table></div>
+          <p class="muted">An odds ratio above 1 helps the team, below 1 hurts it. p-values come from likelihood-ratio tests; <b>bold</b> = significant at 5%.</p>
+        </div>
+        <div class="card">
+          <h3>How good is the model? <small id="m-split"></small></h3>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Approach</th><th>Accuracy</th><th>Log loss</th><th>Brier</th></tr></thead>
+            <tbody id="m-eval"></tbody>
+          </table></div>
+          <div class="chart sm"><canvas id="c-calib"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Biggest upsets <small>(lowest pre-match win chance for the team that won)</small></h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Date</th><th>Winner</th><th>Beat</th><th>Venue</th><th>Win chance</th></tr></thead>
+          <tbody id="m-upsets"></tbody>
+        </table></div>
+      </div>
+      <p class="muted" id="m-foot"></p>
+    </div>
+  </section>
+
   <section id="players">
     <h2>Players &amp; Venues</h2>
     <div class="grid two">
@@ -104,7 +163,7 @@
 </main>
 
 <footer class="wrap">
-  Data: IPL match records based on Cricsheet (github.com/ritesh-ojha/IPL-DATASET) · Built with Python, Flask, Pandas &amp; Chart.js
+  Data: IPL match records based on Cricsheet (github.com/ritesh-ojha/IPL-DATASET) · Built with Python, Flask, Pandas, R &amp; Chart.js
 </footer>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
