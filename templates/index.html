@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IPL Match Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <nav class="nav">
+      <div class="brand"><span class="ball"></span> IPL Analytics</div>
+      <div class="links">
+        <a href="#teams">Teams</a><a href="#toss">Toss</a><a href="#h2h">Head to Head</a><a href="#players">Players</a>
+      </div>
+    </nav>
+    <h1>Indian Premier League <span>Match Analysis</span></h1>
+    <p class="sub">Every IPL match since 2008: who wins, why, and where.</p>
+
+    <div class="filter">
+      <label>Season from <select id="from"></select></label>
+      <label>to <select id="to"></select></label>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="k-matches">–</div><div class="l">Matches</div></div>
+      <div class="kpi"><div class="v" id="k-seasons">–</div><div class="l">Seasons</div></div>
+      <div class="kpi"><div class="v" id="k-teams">–</div><div class="l">Teams</div></div>
+      <div class="kpi"><div class="v" id="k-venues">–</div><div class="l">Venues</div></div>
+      <div class="kpi"><div class="v" id="k-chase">–</div><div class="l">Matches won chasing</div></div>
+      <div class="kpi"><div class="v" id="k-titles">–</div><div class="l" id="k-titles-l">Most titles</div></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <h2>Champions</h2>
+    <div class="timeline" id="champions"></div>
+  </section>
+
+  <section id="teams">
+    <h2>Team Performance</h2>
+    <div class="grid two">
+      <div class="card"><h3>Total wins</h3><div class="chart tall"><canvas id="c-wins"></canvas></div></div>
+      <div class="card"><h3>Win percentage <small>(min. 20 matches)</small></h3><div class="chart tall"><canvas id="c-pct"></canvas></div></div>
+    </div>
+    <div class="grid two">
+      <div class="card"><h3>Titles won</h3><div class="chart"><canvas id="c-titles"></canvas></div></div>
+      <div class="card"><h3>Matches per season</h3><div class="chart"><canvas id="c-season"></canvas></div></div>
+    </div>
+  </section>
+
+  <section id="toss">
+    <h2>Toss &amp; Strategy</h2>
+    <div class="grid three">
+      <div class="card"><h3>Toss decision</h3><div class="chart sm"><canvas id="c-decision"></canvas></div></div>
+      <div class="card"><h3>Toss winner won the match?</h3><div class="chart sm"><canvas id="c-tosswin"></canvas></div></div>
+      <div class="card"><h3>Bat first vs chase: who wins?</h3><div class="chart sm"><canvas id="c-chase"></canvas></div></div>
+    </div>
+    <div class="grid two">
+      <div class="card"><h3>Captains now prefer to field first</h3><div class="chart"><canvas id="c-trend"></canvas></div></div>
+      <div class="card"><h3>Chasing win % by season</h3><div class="chart"><canvas id="c-chasetrend"></canvas></div></div>
+    </div>
+  </section>
+
+  <section id="h2h">
+    <h2>Head to Head</h2>
+    <div class="card">
+      <div class="h2h-pick">
+        <select id="team-a"></select>
+        <span class="vs">VS</span>
+        <select id="team-b"></select>
+      </div>
+      <div class="score">
+        <div class="side"><div class="num" id="a-wins">0</div><div class="name" id="a-name"></div></div>
+        <div class="mid"><div id="h-total">0 matches</div><div class="muted" id="h-nr"></div></div>
+        <div class="side"><div class="num" id="b-wins">0</div><div class="name" id="b-name"></div></div>
+      </div>
+      <div class="split"><div id="split-a"></div><div id="split-b"></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Venue</th><th>Toss</th><th>Winner</th><th>Player of the match</th></tr></thead>
+          <tbody id="h-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="players">
+    <h2>Players &amp; Venues</h2>
+    <div class="grid two">
+      <div class="card"><h3>Most Player of the Match awards</h3><div class="chart tall"><canvas id="c-potm"></canvas></div></div>
+      <div class="card"><h3>Top host cities</h3><div class="chart tall"><canvas id="c-cities"></canvas></div></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  Data: IPL match records based on Cricsheet (github.com/ritesh-ojha/IPL-DATASET) · Built with Python, Flask, Pandas &amp; Chart.js
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
